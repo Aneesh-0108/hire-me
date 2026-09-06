@@ -4,12 +4,14 @@ import { motion } from 'motion/react'
 import { ArrowRight, Check } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { ApiError, apiFetch } from '@/lib/api-client'
+import { ApiError } from '@/lib/api-client'
+import { useSetUserRole } from '@/lib/hooks/use-auth'
+import { type SelfAssignableRole } from '@/lib/schemas/auth.schema'
 
 export default function RoleSelectPage() {
   const router = useRouter()
-  const [selectedRole, setSelectedRole] = useState<'student' | 'recruiter' | null>(null)
-  const [hoveredRole, setHoveredRole] = useState<'student' | 'recruiter' | null>(null)
+  const [selectedRole, setSelectedRole] = useState<SelfAssignableRole | null>(null)
+  const [hoveredRole, setHoveredRole] = useState<SelfAssignableRole | null>(null)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
   const [blink, setBlink] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -37,13 +39,15 @@ export default function RoleSelectPage() {
     return () => clearInterval(interval)
   }, [])
 
+  const setRoleMutation = useSetUserRole()
+
   /**
    * Persists the chosen role, then moves on to the matching dashboard.
    *
    * The role is authorization state, so it lives in Postgres rather than
    * `localStorage` — navigation only happens once the API confirms the write.
    */
-  const handleSelect = async (role: 'student' | 'recruiter') => {
+  const handleSelect = async (role: SelfAssignableRole) => {
     if (isSaving) return
 
     setSelectedRole(role)
@@ -51,7 +55,7 @@ export default function RoleSelectPage() {
     setErrorMsg('')
 
     try {
-      await apiFetch('/api/users/me/role', { method: 'PATCH', body: { role } })
+      await setRoleMutation.mutateAsync(role)
     } catch (error) {
       // An expired session cannot be recovered here — send them back to sign in.
       if (error instanceof ApiError && error.status === 401) {
@@ -215,14 +219,14 @@ export default function RoleSelectPage() {
                 onMouseLeave={() => setHoveredRole(null)}
                 className={`group relative rounded-3xl p-6 sm:p-7 flex flex-col items-center text-center transition-all duration-300 cursor-pointer select-none bg-card border ${
                   selectedRole === 'recruiter'
-                    ? 'border-[#8B5CF6] ring-4 ring-[#8B5CF6]/15 shadow-xl scale-[1.02]'
+                    ? 'border-recruiter ring-4 ring-recruiter/15 shadow-xl scale-[1.02]'
                     : hoveredRole === 'recruiter'
                       ? 'border-purple-200 shadow-xl -translate-y-1'
                       : 'border-slate-100 shadow-[0_6px_30px_-6px_rgba(0,0,0,0.05)] hover:border-slate-200'
                 }`}
               >
                 {/* 3D Recruiter Badge Icon */}
-                <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-[#EFEFFF] flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-105">
+                <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-recruiter-light flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-105">
                   <svg className="w-10 h-10" viewBox="0 0 64 64" fill="none">
                     <rect
                       x="25"
@@ -230,7 +234,7 @@ export default function RoleSelectPage() {
                       width="14"
                       height="8"
                       rx="3"
-                      stroke="#6D28D9"
+                      stroke="var(--recruiter-purple-dark)"
                       strokeWidth="3"
                       fill="none"
                     />
@@ -254,8 +258,8 @@ export default function RoleSelectPage() {
                         y2="50"
                         gradientUnits="userSpaceOnUse"
                       >
-                        <stop stopColor="#8B5CF6" />
-                        <stop offset="1" stopColor="#6D28D9" />
+                        <stop stopColor="var(--recruiter-purple)" />
+                        <stop offset="1" stopColor="var(--recruiter-purple-dark)" />
                       </linearGradient>
                     </defs>
                   </svg>
@@ -275,8 +279,8 @@ export default function RoleSelectPage() {
                 <div
                   className={`w-11 h-11 rounded-full flex items-center justify-center mt-5 transition-all duration-300 ${
                     selectedRole === 'recruiter' || hoveredRole === 'recruiter'
-                      ? 'bg-[#8B5CF6] text-white shadow-md shadow-[#8B5CF6]/30 scale-105'
-                      : 'bg-purple-50 text-[#8B5CF6] border border-purple-100/80'
+                      ? 'bg-recruiter text-white shadow-md shadow-recruiter/30 scale-105'
+                      : 'bg-purple-50 text-recruiter border border-purple-100/80'
                   }`}
                 >
                   {selectedRole === 'recruiter' ? (
