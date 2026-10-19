@@ -2,6 +2,9 @@ import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import type { DbVariables } from '../middleware/db.js'
+import type { AuthVariables } from '../middleware/auth.js'
+import { requireAuth } from '../middleware/auth.js'
+import { requireRecruiter } from '../middleware/requireRecruiter.js'
 import { listTalents } from '../controllers/talents.controller.js'
 import { buildPaginationMeta, PAGINATION_DEFAULTS } from '../utils/pagination.js'
 
@@ -70,9 +73,12 @@ const listTalentsSchema = z.object({
 // ==========================================
 
 export const talentsRouter = new Hono<{
-  Bindings: { DATABASE_URL: string }
-  Variables: DbVariables
+  Bindings: { DATABASE_URL: string; NEON_AUTH_BASE_URL: string }
+  Variables: DbVariables & AuthVariables
 }>()
+
+talentsRouter.use('*', requireAuth)
+talentsRouter.use('*', requireRecruiter)
 
 /**
  * GET /api/talents

@@ -13,6 +13,45 @@ async function json(res: Response): Promise<any> {
 }
 
 // ==========================================
+// AUTH & AUTHORIZATION MOCKS
+// ==========================================
+
+const mockState = vi.hoisted(() => ({
+  auth: {
+    outcome: 'allow' as 'allow' | 'unauthorized',
+    user: {
+      id: '11111111-1111-4111-8111-111111111111',
+      email: 'recruiter@example.com',
+      name: 'Jane Recruiter',
+    },
+  },
+  recruiter: {
+    outcome: 'allow' as 'allow' | 'forbidden',
+    recruiterId: 'recruiter-1',
+  },
+}))
+
+vi.mock('../middleware/auth.ts', () => ({
+  requireAuth: vi.fn(async (c, next) => {
+    if (mockState.auth.outcome === 'unauthorized') {
+      return c.json({ error: 'Unauthorized' }, 401)
+    }
+    c.set('authUser', mockState.auth.user)
+    await next()
+  }),
+}))
+
+vi.mock('../middleware/requireRecruiter.ts', () => ({
+  requireRecruiter: vi.fn(async (c, next) => {
+    if (mockState.recruiter.outcome === 'forbidden') {
+      return c.json({ error: 'Recruiter profile required to manage postings' }, 403)
+    }
+    c.set('recruiterId', mockState.recruiter.recruiterId)
+    await next()
+  }),
+}))
+
+// ==========================================
 // SERVICE MOCK
 // ==========================================
 
@@ -76,6 +115,16 @@ function request(path: string) {
 
 describe('GET /api/talents', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
+    mockState.auth = {
+      outcome: 'allow',
+      user: {
+        id: '11111111-1111-4111-8111-111111111111',
+        email: 'recruiter@example.com',
+        name: 'Jane Recruiter',
+      },
+    }
+    mockState.recruiter = { outcome: 'allow', recruiterId: 'recruiter-1' }
     vi.mocked(listTalents).mockResolvedValue({ rows: [], total: 0 })
   })
 
@@ -343,5 +392,23 @@ describe('GET /api/talents', () => {
   it('rejects invalid skillMatchMode with 400 Bad Request', async () => {
     const res = await request('/api/talents?skillMatchMode=exact')
     expect(res.status).toBe(400)
+  })
+
+  it('returns 401 when unauthenticated (no or invalid token)', async () => {
+    mockState.auth.outcome = 'unauthorized'
+    const res = await request('/api/talents')
+    expect(res.status).toBe(401)
+    const body = await json(res)
+    expect(body.error).toBe('Unauthorized')
+    expect(listTalents).not.toHaveBeenCalled()
+  })
+
+  it('returns 403 when authenticated user has no active recruiter profile', async () => {
+    mockState.recruiter.outcome = 'forbidden'
+    const res = await request('/api/talents')
+    expect(res.status).toBe(403)
+    const body = await json(res)
+    expect(body.error).toBe('Recruiter profile required to manage postings')
+    expect(listTalents).not.toHaveBeenCalled()
   })
 })
